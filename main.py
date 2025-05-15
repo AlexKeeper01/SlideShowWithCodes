@@ -3,10 +3,10 @@ import os
 import json
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QLineEdit, QListWidget, QFileDialog,
-                             QMessageBox, QTabWidget, QSpinBox, QFormLayout, QSizePolicy,
+                             QMessageBox, QTabWidget, QSizePolicy,
                              QFrame, QListWidgetItem, QDialog)
 from PyQt5.QtGui import QPixmap, QFont, QPalette, QColor
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QTimer
 
 
 class SuccessDialog(QDialog):
@@ -564,7 +564,16 @@ class SlideShowViewer(QWidget):
         self.code_input.clear()
         self.parent_window.tabs.setTabEnabled(0, True)
         self.parent_window.tabs.setCurrentIndex(0)
+        # 1. Сначала выходим из полноэкранного режима
+        self.parent_window.showNormal()
+
+        # 2. Даем окну время на завершение анимации (критически важно для Windows/macOS)
+        QTimer.singleShot(50, lambda: [
+            self.parent_window.resize(1000, 700),
+            self.parent_window.move(100, 100)
+        ])
         self.parent_window.tabs.setTabEnabled(1, False)
+
 
 
 class MainWindow(QMainWindow):
@@ -576,6 +585,7 @@ class MainWindow(QMainWindow):
     def initUI(self):
         self.setWindowTitle("Слайд-шоу с кодами")
         self.setGeometry(100, 100, 1000, 700)
+
 
         # Устанавливаем темную палитру для всего приложения
         dark_palette = QPalette()
@@ -717,6 +727,7 @@ class MainWindow(QMainWindow):
         self.viewer.start_slideshow(config["images"], config["codes"])
         self.tabs.setTabEnabled(1, True)
         self.tabs.setCurrentIndex(1)  # Переключаемся на вкладку просмотра
+        self.showFullScreen()
         self.tabs.setTabEnabled(0, False)
 
     def on_tab_changed(self, index):
