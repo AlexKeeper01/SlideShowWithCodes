@@ -3,26 +3,209 @@ import os
 import json
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QLineEdit, QListWidget, QFileDialog,
-                             QMessageBox, QTabWidget, QSizePolicy,
-                             QFrame, QListWidgetItem, QDialog)
+                             QTabWidget, QSizePolicy,
+                             QFrame, QListWidgetItem, QDialog, QGraphicsDropShadowEffect)
 from PyQt5.QtGui import QPixmap, QFont, QPalette, QColor
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QRect, QPoint
+
+
+class AnimatedDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setStyleSheet("background: transparent;")
+
+        # Основной виджет уведомления
+        self.main_widget = QWidget(self)
+        self.main_widget.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                        stop:0 #2d2d2d, stop:1 #1a1a1a);
+                border-radius: 12px;
+                border: 1px solid #444;
+            }
+        """)
+
+        # Эффект тени
+        self.shadow = QGraphicsDropShadowEffect(self.main_widget)
+        self.shadow.setBlurRadius(20)
+        self.shadow.setXOffset(0)
+        self.shadow.setYOffset(0)
+        self.shadow.setColor(QColor(0, 0, 0, 150))
+        self.main_widget.setGraphicsEffect(self.shadow)
+
+        self.layout = QVBoxLayout(self.main_widget)
+        self.layout.setContentsMargins(20, 20, 20, 20)
+        self.layout.setSpacing(15)
+
+        # Заголовок
+        self.title_label = QLabel()
+        self.title_label.setStyleSheet("""
+            QLabel {
+                color: #e0e0e0;
+                font-size: 18px;
+                font-weight: bold;
+                padding-bottom: 5px;
+                border-bottom: 1px solid #444;
+            }
+        """)
+        self.title_label.setAlignment(Qt.AlignCenter)
+
+        # Текст сообщения
+        self.message_label = QLabel()
+        self.message_label.setStyleSheet("""
+            QLabel {
+                color: #e0e0e0;
+                font-size: 14px;
+            }
+        """)
+        self.message_label.setWordWrap(True)
+        self.message_label.setAlignment(Qt.AlignCenter)
+
+        # Кнопки
+        self.button_layout = QHBoxLayout()
+        self.button_layout.setContentsMargins(0, 10, 0, 0)
+        self.button_layout.setSpacing(10)
+
+        self.layout.addWidget(self.title_label)
+        self.layout.addWidget(self.message_label)
+        self.layout.addLayout(self.button_layout)
+
+        # Анимации
+        self.opacity_anim = QPropertyAnimation(self, b"windowOpacity")
+        self.opacity_anim.setDuration(400)
+        self.opacity_anim.setStartValue(0)
+        self.opacity_anim.setEndValue(1)
+        self.opacity_anim.setEasingCurve(QEasingCurve.OutCubic)
+
+        self.scale_anim = QPropertyAnimation(self.main_widget, b"geometry")
+        self.scale_anim.setDuration(300)
+        self.scale_anim.setEasingCurve(QEasingCurve.OutBack)
+
+        self.setFixedSize(400, 200)
+
+    def showEvent(self, event):
+        # Центрируем относительно родительского окна
+        if self.parent():
+            parent_rect = self.parent().geometry()
+            x = parent_rect.x() + (parent_rect.width() - self.width()) // 2
+            y = parent_rect.y() + (parent_rect.height() - self.height()) // 2
+            self.move(x, y)
+
+        # Начальное состояние для анимации
+        start_rect = QRect(self.main_widget.geometry())
+        start_rect.setWidth(10)
+        start_rect.setHeight(10)
+        start_rect.moveCenter(self.main_widget.geometry().center())
+
+        self.scale_anim.setStartValue(start_rect)
+        self.scale_anim.setEndValue(self.main_widget.geometry())
+
+        # Запускаем анимации
+        self.opacity_anim.start()
+        self.scale_anim.start()
+
+        super().showEvent(event)
+
+    def resizeEvent(self, event):
+        self.main_widget.resize(self.size())
+        super().resizeEvent(event)
+
+    def addButton(self, text, style=""):
+        btn = QPushButton(text)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background: #3a3a3a;
+                color: #e0e0e0;
+                border: 1px solid #444;
+                border-radius: 5px;
+                padding: 8px 15px;
+                min-width: 80px;
+                {style}
+            }}
+            QPushButton:hover {{
+                background: #4a4a4a;
+            }}
+        """)
+        self.button_layout.addWidget(btn)
+        return btn
+
+
+class NotificationManager:
+    @staticmethod
+    def show_message(parent, title, message, buttons=None, icon=None):
+        dialog = AnimatedDialog(parent)
+        dialog.title_label.setText(title)
+        dialog.message_label.setText(message)
+
+        if buttons is None:
+            buttons = [("OK", "background: #4CAF50;")]
+
+        for btn_text, btn_style in buttons:
+            btn = dialog.addButton(btn_text, btn_style)
+            btn.clicked.connect(dialog.accept)
+
+        result = dialog.exec_()
+        return result
 
 
 class SuccessDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Поздравление")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFixedSize(400, 200)
 
-        layout = QVBoxLayout()
-        self.setLayout(layout)
+        # Основной виджет
+        self.main_widget = QWidget(self)
+        self.main_widget.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                           stop:0 #2d2d2d, stop:1 #1a1a1a);
+                border-radius: 12px;
+                border: 1px solid #444;
+            }
+        """)
 
-        self.label = QLabel("Поздравляем! Вы успешно прошли слайд-шоу!")
-        self.label.setAlignment(Qt.AlignCenter)
-        self.label.setWordWrap(True)
-        self.label.setStyleSheet("font-size: 16px;")
+        # Эффект тени
+        shadow = QGraphicsDropShadowEffect(self.main_widget)
+        shadow.setBlurRadius(20)
+        shadow.setXOffset(0)
+        shadow.setYOffset(0)
+        shadow.setColor(QColor(0, 0, 0, 150))
+        self.main_widget.setGraphicsEffect(shadow)
 
+        # Разметка
+        layout = QVBoxLayout(self.main_widget)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        # Заголовок
+        self.title_label = QLabel("Поздравление")
+        self.title_label.setStyleSheet("""
+            QLabel {
+                color: #e0e0e0;
+                font-size: 18px;
+                font-weight: bold;
+                padding-bottom: 5px;
+                border-bottom: 1px solid #444;
+            }
+        """)
+        self.title_label.setAlignment(Qt.AlignCenter)
+
+        # Сообщение
+        self.message_label = QLabel("Поздравляем! Вы успешно прошли слайд-шоу!")
+        self.message_label.setStyleSheet("""
+            QLabel {
+                color: #e0e0e0;
+                font-size: 14px;
+            }
+        """)
+        self.message_label.setWordWrap(True)
+        self.message_label.setAlignment(Qt.AlignCenter)
+
+        # Кнопка
         self.btn_close = QPushButton("Завершить")
         self.btn_close.setStyleSheet("""
             QPushButton {
@@ -32,13 +215,56 @@ class SuccessDialog(QDialog):
                 font-size: 14px;
                 padding: 10px;
                 min-width: 100px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
             }
         """)
 
-        layout.addWidget(self.label)
-        layout.addWidget(self.btn_close)
+        # Добавляем элементы
+        layout.addWidget(self.title_label)
+        layout.addWidget(self.message_label)
+        layout.addWidget(self.btn_close, alignment=Qt.AlignCenter)
 
+        # Анимации
+        self.opacity_anim = QPropertyAnimation(self, b"windowOpacity")
+        self.opacity_anim.setDuration(400)
+        self.opacity_anim.setStartValue(0)
+        self.opacity_anim.setEndValue(1)
+        self.opacity_anim.setEasingCurve(QEasingCurve.OutCubic)
+
+        self.scale_anim = QPropertyAnimation(self.main_widget, b"geometry")
+        self.scale_anim.setDuration(400)
+        self.scale_anim.setEasingCurve(QEasingCurve.OutBack)
+
+        # Соединение сигналов
         self.btn_close.clicked.connect(self.accept)
+
+    def showEvent(self, event):
+        # Центрируем относительно родительского окна
+        if self.parent():
+            parent_center = self.parent().geometry().center()
+            self.move(parent_center - QPoint(200, 100))  # 400x200 - размер уведомления
+
+        # Начальное состояние для анимации
+        start_rect = QRect(self.main_widget.geometry())
+        start_rect.setWidth(10)
+        start_rect.setHeight(10)
+        start_rect.moveCenter(self.main_widget.geometry().center())
+
+        self.scale_anim.setStartValue(start_rect)
+        self.scale_anim.setEndValue(self.main_widget.geometry())
+
+        # Запускаем анимации
+        self.opacity_anim.start()
+        self.scale_anim.start()
+
+        super().showEvent(event)
+
+    def resizeEvent(self, event):
+        self.main_widget.resize(self.size())
+        super().resizeEvent(event)
 
 
 class ImageCodeEditor(QWidget):
@@ -52,7 +278,6 @@ class ImageCodeEditor(QWidget):
         self.layout.setSpacing(15)
         self.layout.setContentsMargins(15, 15, 15, 15)
 
-        # Стилизация для темного режима
         self.setStyleSheet("""
             QWidget {
                 background-color: #2d2d2d;
@@ -95,7 +320,6 @@ class ImageCodeEditor(QWidget):
             }
         """)
 
-        # Кнопки добавления/удаления изображений
         self.btn_add = QPushButton("➕ Добавить изображения")
         self.btn_add.setStyleSheet("background-color: #4CAF50;")
         self.btn_remove = QPushButton("❌ Удалить выбранное")
@@ -105,30 +329,25 @@ class ImageCodeEditor(QWidget):
         self.btn_move_down = QPushButton("⬇ Вниз")
         self.btn_move_down.setStyleSheet("background-color: #2196F3;")
 
-        # Настройка размеров кнопок
         self.btn_add.setMinimumHeight(40)
         self.btn_remove.setMinimumHeight(40)
         self.btn_move_up.setMinimumHeight(30)
         self.btn_move_down.setMinimumHeight(30)
 
-        # Горизонтальная линия разделения
         line1 = QFrame()
         line1.setFrameShape(QFrame.HLine)
         line1.setFrameShadow(QFrame.Sunken)
         line1.setStyleSheet("color: #444;")
 
-        # Список изображений с паролями
         self.list_images = QListWidget()
         self.list_images.setMinimumHeight(300)
         self.list_images.setSelectionMode(QListWidget.SingleSelection)
 
-        # Горизонтальная линия разделения
         line2 = QFrame()
         line2.setFrameShape(QFrame.HLine)
         line2.setFrameShadow(QFrame.Sunken)
         line2.setStyleSheet("color: #444;")
 
-        # Кнопки управления
         btn_layout = QHBoxLayout()
         btn_layout.addWidget(self.btn_add)
         btn_layout.addWidget(self.btn_remove)
@@ -137,7 +356,6 @@ class ImageCodeEditor(QWidget):
         move_btn_layout.addWidget(self.btn_move_up)
         move_btn_layout.addWidget(self.btn_move_down)
 
-        # Форма для кода с рамкой
         code_frame = QFrame()
         code_frame.setFrameShape(QFrame.StyledPanel)
         code_frame.setStyleSheet("""
@@ -160,7 +378,6 @@ class ImageCodeEditor(QWidget):
         code_layout.addWidget(self.code_input)
         code_layout.addWidget(self.btn_save_code)
 
-        # Соединение сигналов
         self.btn_add.clicked.connect(self.add_images)
         self.btn_remove.clicked.connect(self.remove_image)
         self.btn_move_up.clicked.connect(self.move_up)
@@ -168,7 +385,6 @@ class ImageCodeEditor(QWidget):
         self.btn_save_code.clicked.connect(self.save_code)
         self.list_images.currentItemChanged.connect(self.update_code_display)
 
-        # Добавление виджетов в основной layout
         self.layout.addLayout(btn_layout)
         self.layout.addWidget(line1)
         self.layout.addWidget(self.list_images)
@@ -179,7 +395,6 @@ class ImageCodeEditor(QWidget):
 
         self.setLayout(self.layout)
 
-        # Данные
         self.images = []
         self.codes = {}
 
@@ -190,7 +405,6 @@ class ImageCodeEditor(QWidget):
         )
 
         if files:
-            # Всегда начинаем нумерацию с 1
             start_num = len(self.images) + 1
 
             for i, file in enumerate(files, start=start_num):
@@ -199,32 +413,26 @@ class ImageCodeEditor(QWidget):
                 self.add_image_to_list(file)
 
     def add_image_to_list(self, file_path):
-        """Полная версия метода добавления изображения в список"""
         item = QListWidgetItem()
         self.list_images.addItem(item)
         self.setup_list_item(item, file_path)
 
-        # Если это первый элемент, выделяем его
         if self.list_images.count() == 1:
             self.list_images.setCurrentRow(0)
 
     def setup_list_item(self, item, file_path):
-        """Создает и настраивает виджет для элемента списка"""
         widget = QWidget()
         layout = QHBoxLayout()
         widget.setLayout(layout)
 
-        # Иконка изображения
         icon_label = QLabel()
         pixmap = QPixmap(file_path)
         if not pixmap.isNull():
             icon_label.setPixmap(pixmap.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
-        # Название файла
         name_label = QLabel(os.path.basename(file_path))
         name_label.setStyleSheet("font-weight: bold;")
 
-        # Пароль
         code_label = QLabel(f"Код: {self.codes.get(file_path, '')}")
         code_label.setStyleSheet("color: #FF9800;")
 
@@ -236,89 +444,110 @@ class ImageCodeEditor(QWidget):
         item.setSizeHint(widget.sizeHint())
         self.list_images.setItemWidget(item, widget)
 
-        # Применяем стиль выделения, если элемент выбран
         if self.list_images.currentItem() == item:
             widget.setStyleSheet("background-color: #3a3a3a; border: 1px solid #555; border-radius: 3px;")
 
     def remove_image(self):
-        if not self.images:  # Если список пуст
-            return
+        try:
+            # Проверка наличия элементов
+            if not self.images or self.list_images.count() == 0:
+                NotificationManager.show_message(
+                    self,
+                    "Ошибка",
+                    "Нет изображений для удаления!",
+                    buttons=[("OK", "background: #f44336;")]
+                )
+                return
 
-        current_row = self.list_images.currentRow()
-        if 0 <= current_row < len(self.images):
-            try:
-                # Получаем и удаляем изображение
-                removed_image = self.images.pop(current_row)
+            current_row = self.list_images.currentRow()
+            if current_row < 0 or current_row >= len(self.images):
+                return
 
-                # Удаляем из интерфейса
-                self.list_images.takeItem(current_row)
+            # Блокируем сигналы во время обновления
+            self.list_images.blockSignals(True)
 
-                # Удаляем код, если существует
-                self.codes.pop(removed_image, None)
+            # Получаем данные перед удалением
+            image_to_remove = self.images[current_row]
 
-                # Обновляем отображение кода, если удалили текущий элемент
-                if self.list_images.currentRow() >= 0:
-                    self.update_code_display(self.list_images.currentItem(), None)
-                else:
-                    self.code_input.clear()
+            # Удаляем из словаря кодов
+            if image_to_remove in self.codes:
+                del self.codes[image_to_remove]
 
-            except Exception as e:
-                QMessageBox.warning(self, "Ошибка", f"Не удалось удалить изображение: {str(e)}")
+            # Удаляем из списка изображений
+            del self.images[current_row]
+
+            # Удаляем из QListWidget
+            item = self.list_images.takeItem(current_row)
+            if item:
+                item = None  # Явное освобождение памяти
+
+            # Обновляем выбор
+            new_count = self.list_images.count()
+            if new_count > 0:
+                new_row = min(current_row, new_count - 1)
+                self.list_images.setCurrentRow(new_row)
+                self.list_images.blockSignals(False)  # Разблокируем сигналы
+                self.update_code_display(self.list_images.currentItem(), None)
+            else:
+                self.list_images.blockSignals(False)
+                self.code_input.clear()
+
+            # Принудительное обновление интерфейса
+            QApplication.processEvents()
+
+        except Exception as e:
+            self.list_images.blockSignals(False)  # Всегда разблокируем сигналы
+            import traceback
+            traceback.print_exc()
+            NotificationManager.show_message(
+                self,
+                "Ошибка",
+                f"Ошибка при удалении: {str(e)}",
+                buttons=[("OK", "background: #f44336;")]
+            )
 
     def move_up(self):
         current_row = self.list_images.currentRow()
         if current_row > 0:
-            # Получаем текущий элемент и его данные
             current_item = self.list_images.item(current_row)
             current_widget = self.list_images.itemWidget(current_item)
             current_image = self.images[current_row]
 
-            # Получаем предыдущий элемент
             prev_item = self.list_images.item(current_row - 1)
             prev_widget = self.list_images.itemWidget(prev_item)
 
-            # Обновляем данные в списках
             self.images[current_row], self.images[current_row - 1] = (
                 self.images[current_row - 1], self.images[current_row]
             )
 
-            # Полностью пересоздаем виджеты для обоих элементов
             self.list_images.removeItemWidget(current_item)
             self.list_images.removeItemWidget(prev_item)
 
-            # Создаем новые виджеты с обновленными данными
             self.setup_list_item(current_item, self.images[current_row])
             self.setup_list_item(prev_item, self.images[current_row - 1])
 
-            # Восстанавливаем выделение
             self.list_images.setCurrentRow(current_row - 1)
 
     def move_down(self):
         current_row = self.list_images.currentRow()
         if current_row < self.list_images.count() - 1:
-            # Получаем текущий элемент и его данные
             current_item = self.list_images.item(current_row)
             current_widget = self.list_images.itemWidget(current_item)
             current_image = self.images[current_row]
 
-            # Получаем следующий элемент
             next_item = self.list_images.item(current_row + 1)
             next_widget = self.list_images.itemWidget(next_item)
 
-            # Обновляем данные в списках
             self.images[current_row], self.images[current_row + 1] = (
                 self.images[current_row + 1], self.images[current_row]
             )
 
-            # Полностью пересоздаем виджеты для обоих элементов
             self.list_images.removeItemWidget(current_item)
             self.list_images.removeItemWidget(next_item)
 
-            # Создаем новые виджеты с обновленными данными
             self.setup_list_item(current_item, self.images[current_row])
             self.setup_list_item(next_item, self.images[current_row + 1])
 
-            # Восстанавливаем выделение
             self.list_images.setCurrentRow(current_row + 1)
 
     def update_code_display(self, current, previous):
@@ -344,13 +573,17 @@ class ImageCodeEditor(QWidget):
             new_code = self.code_input.text()
             self.codes[current_image] = new_code
 
-            # Обновляем отображение кода в списке
             item = self.list_images.item(current_row)
             widget = self.list_images.itemWidget(item)
             code_label = widget.layout().itemAt(2).widget()
             code_label.setText(f"Код: {new_code}")
 
-            QMessageBox.information(self, "Сохранено", "Код успешно сохранен!")
+            NotificationManager.show_message(
+                self,
+                "Сохранено",
+                "Код успешно сохранен!",
+                buttons=[("OK", "background: #4CAF50;")]
+            )
 
     def get_config(self):
         return {
@@ -377,108 +610,92 @@ class SlideShowViewer(QWidget):
 
     def initUI(self):
         self.layout = QVBoxLayout()
-        self.layout.setSpacing(20)
-        self.layout.setContentsMargins(15, 15, 15, 15)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
 
-        # Стилизация для темного режима
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #2d2d2d;
-                color: #e0e0e0;
-            }
-            QPushButton {
-                padding: 10px;
-                border-radius: 5px;
-                font-weight: bold;
-                min-width: 100px;
-            }
-            QLineEdit {
-                padding: 10px;
-                border: 1px solid #444;
-                border-radius: 5px;
-                font-size: 16px;
-                background-color: #353535;
-                color: #e0e0e0;
-            }
-            QLabel#image_label {
-                border: 2px solid #444;
-                border-radius: 5px;
-                background-color: #353535;
-            }
-            QLabel {
-                color: #e0e0e0;
-            }
-        """)
-
-        # Изображение
+        # Изображение (максимально растягиваем)
         self.image_label = QLabel()
-        self.image_label.setObjectName("image_label")
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.image_label.setStyleSheet("background-color: #353535;")
+        self.layout.addWidget(self.image_label, stretch=10)
 
-        # Горизонтальная линия разделения
-        line1 = QFrame()
-        line1.setFrameShape(QFrame.HLine)
-        line1.setFrameShadow(QFrame.Sunken)
-        line1.setStyleSheet("color: #444;")
+        # Нижняя панель с элементами управления
+        bottom_panel = QWidget()
+        bottom_panel.setStyleSheet("background-color: #2d2d2d;")
+        bottom_layout = QVBoxLayout(bottom_panel)
+        bottom_layout.setContentsMargins(15, 10, 15, 10)
+        bottom_layout.setSpacing(10)
 
-        # Поле для ввода кода с рамкой
-        input_frame = QFrame()
-        input_frame.setFrameShape(QFrame.StyledPanel)
-        input_frame.setStyleSheet("""
-            QFrame {
+        # Поле для ввода кода
+        self.code_input = QLineEdit()
+        self.code_input.setPlaceholderText("Введите код для перехода...")
+        self.code_input.setStyleSheet("""
+            QLineEdit {
                 background-color: #353535;
+                color: #e0e0e0;
                 border: 1px solid #444;
                 border-radius: 5px;
                 padding: 10px;
+                font-size: 16px;
             }
         """)
-        input_layout = QVBoxLayout(input_frame)
+        bottom_layout.addWidget(self.code_input)
 
-        self.code_input = QLineEdit()
-        self.code_input.setPlaceholderText("Введите код для перехода...")
-        self.code_input.setMinimumHeight(50)
+        # Кнопки навигации
+        nav_layout = QHBoxLayout()
+        nav_layout.setSpacing(10)
 
-        input_layout.addWidget(QLabel("Код для перехода:"))
-        input_layout.addWidget(self.code_input)
-
-        # Горизонтальная линия разделения
-        line2 = QFrame()
-        line2.setFrameShape(QFrame.HLine)
-        line2.setFrameShadow(QFrame.Sunken)
-        line2.setStyleSheet("color: #444;")
-
-        # Кнопки управления
         self.btn_prev = QPushButton("⏪ Назад")
-        self.btn_prev.setStyleSheet("background-color: #2196F3;")
+        self.btn_prev.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #0b7dda;
+            }
+        """)
+
         self.btn_next = QPushButton("Вперед ⏩ (Enter)")
-        self.btn_next.setStyleSheet("background-color: #4CAF50;")
-        self.btn_close = QPushButton("🚪 Закрыть слайд-шоу")
-        self.btn_close.setStyleSheet("background-color: #f44336;")
+        self.btn_next.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
 
-        # Увеличиваем шрифт кнопок
-        font = QFont()
-        font.setPointSize(12)
-        self.btn_prev.setFont(font)
-        self.btn_next.setFont(font)
-        self.btn_close.setFont(font)
+        self.btn_close = QPushButton("🚪 Закрыть")
+        self.btn_close.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d32f2f;
+            }
+        """)
 
-        # Расположение кнопок
-        btn_layout = QHBoxLayout()
-        btn_layout.addWidget(self.btn_prev)
-        btn_layout.addWidget(self.btn_next)
-        btn_layout.addWidget(self.btn_close)
+        nav_layout.addWidget(self.btn_prev)
+        nav_layout.addWidget(self.btn_next)
+        nav_layout.addWidget(self.btn_close)
+        bottom_layout.addLayout(nav_layout)
 
-        # Добавление виджетов в основной layout
-        self.layout.addWidget(self.image_label, stretch=5)
-        self.layout.addWidget(line1)
-        self.layout.addWidget(input_frame, stretch=1)
-        self.layout.addWidget(line2)
-        self.layout.addLayout(btn_layout, stretch=1)
-
+        self.layout.addWidget(bottom_panel)
         self.setLayout(self.layout)
 
-        # Соединение сигналов
         self.btn_prev.clicked.connect(self.prev_image)
         self.btn_next.clicked.connect(self.next_image)
         self.btn_close.clicked.connect(self.close_slideshow)
@@ -486,7 +703,12 @@ class SlideShowViewer(QWidget):
 
     def start_slideshow(self, images, codes):
         if not images:
-            QMessageBox.warning(self, "Ошибка", "Нет изображений для показа!")
+            NotificationManager.show_message(
+                self,
+                "Ошибка",
+                "Нет изображений для показа!",
+                buttons=[("OK", "background: #f44336;")]
+            )
             return
 
         self.images = images
@@ -512,8 +734,12 @@ class SlideShowViewer(QWidget):
                 self.code_input.clear()
                 self.code_input.setFocus()
             else:
-                QMessageBox.warning(self, "Ошибка",
-                                    f"Не удалось загрузить изображение: {self.images[self.current_index]}")
+                NotificationManager.show_message(
+                    self,
+                    "Ошибка",
+                    f"Не удалось загрузить изображение: {self.images[self.current_index]}",
+                    buttons=[("OK", "background: #f44336;")]
+                )
 
     def prev_image(self):
         if not self.slideshow_active:
@@ -525,28 +751,39 @@ class SlideShowViewer(QWidget):
 
     def next_image(self):
         if not self.slideshow_active:
-            QMessageBox.warning(self, "Ошибка", "Слайд-шоу не запущено!")
+            NotificationManager.show_message(
+                self,
+                "Ошибка",
+                "Слайд-шоу не запущено!",
+                buttons=[("OK", "background: #f44336;")]
+            )
             return
 
         if not self.images:
-            QMessageBox.warning(self, "Ошибка", "Нет изображений для показа!")
+            NotificationManager.show_message(
+                self,
+                "Ошибка",
+                "Нет изображений для показа!",
+                buttons=[("OK", "background: #f44336;")]
+            )
             return
 
         if self.current_index >= len(self.images) - 1:
-            # Это последнее изображение - проверяем код
             current_image = self.images[self.current_index]
             required_code = self.codes.get(current_image, "")
 
             if self.code_input.text() == required_code:
-                # Показываем диалог успешного завершения
                 success_dialog = SuccessDialog(self)
                 success_dialog.exec_()
-
-                # Закрываем слайд-шоу и возвращаемся в редактор
                 self.close_slideshow()
                 self.parent_window.tabs.setCurrentIndex(0)
             else:
-                QMessageBox.warning(self, "Ошибка", "Неверный код!")
+                NotificationManager.show_message(
+                    self,
+                    "Ошибка",
+                    "Неверный код!",
+                    buttons=[("OK", "background: #f44336;")]
+                )
             return
 
         current_image = self.images[self.current_index]
@@ -556,7 +793,12 @@ class SlideShowViewer(QWidget):
             self.current_index += 1
             self.show_image()
         else:
-            QMessageBox.warning(self, "Ошибка", "Неверный код!")
+            NotificationManager.show_message(
+                self,
+                "Ошибка",
+                "Неверный код!",
+                buttons=[("OK", "background: #f44336;")]
+            )
 
     def close_slideshow(self):
         self.slideshow_active = False
@@ -564,16 +806,17 @@ class SlideShowViewer(QWidget):
         self.code_input.clear()
         self.parent_window.tabs.setTabEnabled(0, True)
         self.parent_window.tabs.setCurrentIndex(0)
-        # 1. Сначала выходим из полноэкранного режима
         self.parent_window.showNormal()
 
-        # 2. Даем окну время на завершение анимации (критически важно для Windows/macOS)
+        # Показываем кнопки снова
+        self.parent_window.btn_start.show()
+        self.parent_window.btn_save.show()
+
         QTimer.singleShot(50, lambda: [
             self.parent_window.resize(1000, 700),
             self.parent_window.move(100, 100)
         ])
         self.parent_window.tabs.setTabEnabled(1, False)
-
 
 
 class MainWindow(QMainWindow):
@@ -586,8 +829,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Слайд-шоу с кодами")
         self.setGeometry(100, 100, 1000, 700)
 
-
-        # Устанавливаем темную палитру для всего приложения
+        # Устанавливаем темную палитру
         dark_palette = QPalette()
         dark_palette.setColor(QPalette.Window, QColor(53, 53, 53))
         dark_palette.setColor(QPalette.WindowText, Qt.white)
@@ -604,10 +846,11 @@ class MainWindow(QMainWindow):
         dark_palette.setColor(QPalette.HighlightedText, Qt.black)
         self.setPalette(dark_palette)
 
-        # Основной стиль
+        # Стиль для всего приложения
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #2d2d2d;
+                color: #e0e0e0;
             }
             QTabWidget::pane {
                 border: 1px solid #444;
@@ -630,12 +873,9 @@ class MainWindow(QMainWindow):
             QTabBar::tab:hover {
                 background: #3d3d3d;
             }
-            QMessageBox {
+            QStatusBar {
                 background-color: #2d2d2d;
-            }
-            QMessageBox QLabel {
                 color: #e0e0e0;
-                min-width: 300px;
             }
         """)
 
@@ -649,7 +889,14 @@ class MainWindow(QMainWindow):
         # Просмотрщик
         self.viewer = SlideShowViewer(self)
 
-        # Кнопка запуска слайд-шоу
+        # Добавляем вкладки
+        self.tabs.addTab(self.editor, "📝 Редактор")
+        self.tabs.addTab(self.viewer, "🖼️ Просмотр")
+
+        # Блокируем вкладку просмотра до запуска слайд-шоу
+        self.tabs.setTabEnabled(1, False)
+
+        # Кнопки управления
         self.btn_start = QPushButton("▶️ Запустить слайд-шоу")
         self.btn_start.setStyleSheet("""
             QPushButton {
@@ -659,13 +906,13 @@ class MainWindow(QMainWindow):
                 font-size: 16px;
                 padding: 15px;
                 min-width: 200px;
+                border-radius: 5px;
             }
             QPushButton:hover {
                 background-color: #45a049;
             }
         """)
 
-        # Кнопка сохранения конфигурации
         self.btn_save = QPushButton("💾 Сохранить конфигурацию")
         self.btn_save.setStyleSheet("""
             QPushButton {
@@ -675,18 +922,12 @@ class MainWindow(QMainWindow):
                 font-size: 16px;
                 padding: 15px;
                 min-width: 200px;
+                border-radius: 5px;
             }
             QPushButton:hover {
                 background-color: #0b7dda;
             }
         """)
-
-        # Добавляем вкладки
-        self.tabs.addTab(self.editor, "📝 Редактор")
-        self.tabs.addTab(self.viewer, "🖼️ Просмотр")
-
-        # Блокируем вкладку просмотра до запуска слайд-шоу
-        self.tabs.setTabEnabled(1, False)
 
         # Горизонтальная линия разделения
         line = QFrame()
@@ -694,17 +935,17 @@ class MainWindow(QMainWindow):
         line.setFrameShadow(QFrame.Sunken)
         line.setStyleSheet("color: #444;")
 
-        # Создаем layout для кнопок
-        btn_layout = QHBoxLayout()
-        btn_layout.addWidget(self.btn_start)
-        btn_layout.addWidget(self.btn_save)
-        btn_layout.setSpacing(20)
-
         # Основной layout
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.tabs)
         main_layout.addWidget(line)
+
+        # Layout для кнопок
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(self.btn_start)
+        btn_layout.addWidget(self.btn_save)
         main_layout.addLayout(btn_layout)
+
         main_layout.setContentsMargins(15, 15, 15, 15)
         main_layout.setSpacing(20)
 
@@ -721,19 +962,32 @@ class MainWindow(QMainWindow):
     def start_slideshow(self):
         config = self.editor.get_config()
         if not config["images"]:
-            QMessageBox.warning(self, "Ошибка", "Добавьте хотя бы одно изображение!")
+            NotificationManager.show_message(
+                self,
+                "Ошибка",
+                "Добавьте хотя бы одно изображение!",
+                buttons=[("OK", "background: #f44336;")]
+            )
             return
+
+        # Скрываем кнопки перед запуском
+        self.btn_start.hide()
+        self.btn_save.hide()
 
         self.viewer.start_slideshow(config["images"], config["codes"])
         self.tabs.setTabEnabled(1, True)
-        self.tabs.setCurrentIndex(1)  # Переключаемся на вкладку просмотра
-        self.showFullScreen()
+        self.tabs.setCurrentIndex(1)
         self.tabs.setTabEnabled(0, False)
+        self.showFullScreen()
 
     def on_tab_changed(self, index):
-        # Если пытаются перейти на вкладку просмотра без запуска слайд-шоу
         if index == 1 and not self.viewer.slideshow_active:
-            QMessageBox.warning(self, "Ошибка", "Сначала запустите слайд-шоу!")
+            NotificationManager.show_message(
+                self,
+                "Ошибка",
+                "Сначала запустите слайд-шоу!",
+                buttons=[("OK", "background: #f44336;")]
+            )
             self.tabs.setCurrentIndex(0)
 
     def save_config(self):
@@ -741,9 +995,19 @@ class MainWindow(QMainWindow):
         try:
             with open("config.json", "w") as f:
                 json.dump(config, f)
-            QMessageBox.information(self, "Сохранено", "Конфигурация успешно сохранена!")
+            NotificationManager.show_message(
+                self,
+                "Сохранено",
+                "Конфигурация успешно сохранена!",
+                buttons=[("OK", "background: #4CAF50;")]
+            )
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить конфигурацию: {str(e)}")
+            NotificationManager.show_message(
+                self,
+                "Ошибка",
+                f"Не удалось сохранить конфигурацию: {str(e)}",
+                buttons=[("OK", "background: #f44336;")]
+            )
 
     def load_config(self):
         try:
@@ -752,10 +1016,14 @@ class MainWindow(QMainWindow):
                     config = json.load(f)
                 self.editor.set_config(config)
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить конфигурацию: {str(e)}")
+            NotificationManager.show_message(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить конфигурацию: {str(e)}",
+                buttons=[("OK", "background: #f44336;")]
+            )
 
     def resizeEvent(self, event):
-        # При изменении размера окна обновляем изображение
         if self.tabs.currentIndex() == 1 and self.viewer.slideshow_active:
             self.viewer.show_image()
         super().resizeEvent(event)
@@ -763,7 +1031,20 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    app.setStyle('Fusion')  # Современный стиль
+    app.setStyle('Fusion')
+
+    # Устанавливаем темную тему для всех диалогов
+    app.setStyleSheet("""
+        QDialog {
+            background-color: #2d2d2d;
+            color: #e0e0e0;
+        }
+        QToolTip {
+            background-color: #353535;
+            color: #e0e0e0;
+            border: 1px solid #444;
+        }
+    """)
 
     window = MainWindow()
     window.show()
