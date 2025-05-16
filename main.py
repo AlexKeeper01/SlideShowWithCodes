@@ -963,7 +963,7 @@ class MainWindow(QMainWindow):
         config = self.editor.get_config()
         if not config["images"]:
             NotificationManager.show_message(
-                self,
+                self.editor,
                 "Ошибка",
                 "Добавьте хотя бы одно изображение!",
                 buttons=[("OK", "background: #f44336;")]
@@ -983,7 +983,7 @@ class MainWindow(QMainWindow):
     def on_tab_changed(self, index):
         if index == 1 and not self.viewer.slideshow_active:
             NotificationManager.show_message(
-                self,
+                self.editor,
                 "Ошибка",
                 "Сначала запустите слайд-шоу!",
                 buttons=[("OK", "background: #f44336;")]
@@ -996,14 +996,14 @@ class MainWindow(QMainWindow):
             with open("config.json", "w") as f:
                 json.dump(config, f)
             NotificationManager.show_message(
-                self,
+                self.editor,
                 "Сохранено",
                 "Конфигурация успешно сохранена!",
                 buttons=[("OK", "background: #4CAF50;")]
             )
         except Exception as e:
             NotificationManager.show_message(
-                self,
+                self.editor,
                 "Ошибка",
                 f"Не удалось сохранить конфигурацию: {str(e)}",
                 buttons=[("OK", "background: #f44336;")]
@@ -1017,7 +1017,7 @@ class MainWindow(QMainWindow):
                 self.editor.set_config(config)
         except Exception as e:
             NotificationManager.show_message(
-                self,
+                self.editor,
                 "Ошибка",
                 f"Не удалось загрузить конфигурацию: {str(e)}",
                 buttons=[("OK", "background: #f44336;")]
