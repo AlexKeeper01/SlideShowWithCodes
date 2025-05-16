@@ -410,7 +410,7 @@ class ImageCodeEditor(QWidget):
         """)
         self.btn_save_code.setMinimumHeight(40)
 
-        code_layout.addWidget(QLabel("🔑 Код для перехода:"))
+        code_layout.addWidget(QLabel("🔑 Код для перехода (оставьте пустым для перехода без кода):"))
         code_layout.addWidget(self.code_input)
         code_layout.addWidget(self.btn_save_code)
 
